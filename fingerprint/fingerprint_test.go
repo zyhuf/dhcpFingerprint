@@ -1,10 +1,19 @@
 package fingerprint_test
 
 import (
+	"bytes"
+	"encoding/binary"
 	"testing"
 
 	"reyzar.com/fingerprint"
 )
+
+func Uint16ToBytes(x uint16) []byte {
+	bytesBuffer := bytes.NewBuffer([]byte{})
+	binary.Write(bytesBuffer, binary.BigEndian, x)
+
+	return bytesBuffer.Bytes()
+}
 
 func TestFingerprint(t *testing.T) {
 	fprint := new(fingerprint.DhcpFprint)
@@ -42,14 +51,13 @@ func TestFingerprint(t *testing.T) {
 	fprint.OptType = 6
 	//hexStr := "00010001260c7de1000c29abbe11"
 	//data, _ := hex.DecodeString(hexStr)
-	fprint.OptData = append(fprint.OptData, 00)
-	fprint.OptData = append(fprint.OptData, 23)
-	fprint.OptData = append(fprint.OptData, 00)
-	fprint.OptData = append(fprint.OptData, 24)
+	fprint.OptData = append(fprint.OptData, Uint16ToBytes(23)...)
+	fprint.OptData = append(fprint.OptData, Uint16ToBytes(24)...)
 	fprint.Vendor = []byte("*")
 	fprint.OsName = "xiaoMi 10"
 	fingerprint.LoadFingerprint(fprint)
 
-	//go fingerprint.HandleFingerprintDHCPv4()
-	//fingerprint.HandleFingerprintDHCPv6()
+	fingerprint.CollectSysNameByFingerprint()
+
+	select {}
 }
