@@ -3,6 +3,7 @@ package fingerprint_test
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"testing"
 
 	"reyzar.com/fingerprint"
@@ -38,7 +39,7 @@ func TestFingerprint(t *testing.T) {
 
 	fprint.Vendor = []byte("*")
 	fprint.OsName = "Huawei honor"
-	fingerprint.LoadFingerprint(fprint)
+	fingerprint.AddFingerprint(1001, fprint)
 
 	fprint = new(fingerprint.DhcpFprint)
 	fprint.ProtocolType = 2
@@ -53,9 +54,10 @@ func TestFingerprint(t *testing.T) {
 	//data, _ := hex.DecodeString(hexStr)
 	fprint.OptData = append(fprint.OptData, Uint16ToBytes(23)...)
 	fprint.OptData = append(fprint.OptData, Uint16ToBytes(24)...)
+	fmt.Printf("%x", fprint.OptData)
 	fprint.Vendor = []byte("*")
 	fprint.OsName = "xiaoMi 10"
-	fingerprint.LoadFingerprint(fprint)
+	fingerprint.AddFingerprint(1002, fprint)
 
 	fingerprint.CollectSysNameByFingerprint()
 

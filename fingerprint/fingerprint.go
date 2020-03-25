@@ -2,6 +2,7 @@ package fingerprint
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -14,10 +15,9 @@ import (
 )
 
 var (
-	device          string = "any"
-	snapshotLen     int32  = 1024
-	promiscuous     bool   = false
-	err             error
+	device          string        = "any"
+	snapshotLen     int32         = 1024
+	promiscuous     bool          = false
 	timeout         time.Duration = 30 * time.Second
 	Protocol_DHCPv4 uint8         = 1
 	Protocol_DHCPv6 uint8         = 2
@@ -35,7 +35,7 @@ type DhcpFprint struct {
 	OsName       string
 }
 
-var g_dhcpFprint []*DhcpFprint
+var g_MapDhcpFprint map[uint64]*DhcpFprint = make(map[uint64]*DhcpFprint)
 var g_RwMutex sync.RWMutex
 
 func formatMAC(mac []byte) string {
@@ -46,10 +46,24 @@ func formatMAC(mac []byte) string {
 	return strings.Join(m, ":")
 }
 
-func LoadFingerprint(fingerprint *DhcpFprint) {
+func AddFingerprint(index uint64, fingerprint *DhcpFprint) error {
 	g_RwMutex.Lock()
 	defer g_RwMutex.Unlock()
-	g_dhcpFprint = append(g_dhcpFprint, fingerprint)
+
+	if _, ok := g_MapDhcpFprint[index]; !ok {
+		g_MapDhcpFprint[index] = fingerprint
+	} else {
+		return errors.New("Duplicate index")
+	}
+
+	return nil
+}
+
+func DelFingerprint(index uint64) {
+	g_RwMutex.Lock()
+	defer g_RwMutex.Unlock()
+
+	delete(g_MapDhcpFprint, index)
 }
 
 func CollectSysNameByFingerprint() {
@@ -145,18 +159,18 @@ func matchFingerprintDHCPv4(ttl uint8, packetOpts layers.DHCPOptions) string {
 	g_RwMutex.RLock()
 	defer g_RwMutex.RUnlock()
 
-	for i := 0; i < len(g_dhcpFprint); i++ {
-		if g_dhcpFprint[i].ProtocolType == Protocol_DHCPv6 {
+	for _, val := range g_MapDhcpFprint {
+		if val.ProtocolType == Protocol_DHCPv6 {
 			continue
 		}
 		var msgType []byte
-		msgType = append(msgType, g_dhcpFprint[i].MessageType)
+		msgType = append(msgType, val.MessageType)
 		if (isOptEqual(byte(layers.DHCPOptMessageType), msgType, packetOpts)) &&
-			(ttl == g_dhcpFprint[i].TTL || g_dhcpFprint[i].TTL == 0) &&
-			(isOptsEqual(g_dhcpFprint[i].Opts, packetOpts) || g_dhcpFprint[i].Opts[0] == 0) &&
-			(isOptEqual(g_dhcpFprint[i].OptType, g_dhcpFprint[i].OptData, packetOpts) || g_dhcpFprint[i].OptType == 0) &&
-			(isOptEqual(byte(layers.DHCPOptClassID), g_dhcpFprint[i].Vendor, packetOpts) || string(g_dhcpFprint[i].Vendor) == "*") {
-			return g_dhcpFprint[i].OsName
+			(ttl == val.TTL || val.TTL == 0) &&
+			(isOptsEqual(val.Opts, packetOpts) || val.Opts[0] == 0) &&
+			(isOptEqual(val.OptType, val.OptData, packetOpts) || val.OptType == 0) &&
+			(isOptEqual(byte(layers.DHCPOptClassID), val.Vendor, packetOpts) || string(val.Vendor) == "*") {
+			return val.OsName
 		}
 	}
 
@@ -167,17 +181,17 @@ func matchFingerprintDHCPv6(ttl uint8, msgType byte, packetOpts layers.DHCPv6Opt
 	g_RwMutex.RLock()
 	defer g_RwMutex.RUnlock()
 
-	for i := 0; i < len(g_dhcpFprint); i++ {
-		if g_dhcpFprint[i].ProtocolType == Protocol_DHCPv4 {
+	for _, val := range g_MapDhcpFprint {
+		if val.ProtocolType == Protocol_DHCPv4 {
 			continue
 		}
 
-		if (g_dhcpFprint[i].MessageType == msgType) &&
-			(ttl == g_dhcpFprint[i].TTL || g_dhcpFprint[i].TTL == 0) &&
-			(isOptsEqualDHCPv6(g_dhcpFprint[i].Opts, packetOpts) || g_dhcpFprint[i].Opts[0] == 0) &&
-			(isOptEqualDHCPv6(uint16(g_dhcpFprint[i].OptType), g_dhcpFprint[i].OptData, packetOpts) || g_dhcpFprint[i].OptType == 0) &&
-			(isOptEqualDHCPv6(DHCPv6OptVendor, g_dhcpFprint[i].Vendor, packetOpts) || string(g_dhcpFprint[i].Vendor) == "*") {
-			return g_dhcpFprint[i].OsName
+		if (val.MessageType == msgType) &&
+			(ttl == val.TTL || val.TTL == 0) &&
+			(isOptsEqualDHCPv6(val.Opts, packetOpts) || val.Opts[0] == 0) &&
+			(isOptEqualDHCPv6(uint16(val.OptType), val.OptData, packetOpts) || val.OptType == 0) &&
+			(isOptEqualDHCPv6(DHCPv6OptVendor, val.Vendor, packetOpts) || string(val.Vendor) == "*") {
+			return val.OsName
 		}
 	}
 
